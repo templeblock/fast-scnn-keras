@@ -1,12 +1,8 @@
-from tensorflow.keras.models import Model, Sequential
-from tensorflow.keras.layers import Conv2D, SeparableConv2D, DepthwiseConv2D
-from tensorflow.keras.layers import UpSampling2D
-from tensorflow.keras.layers import BatchNormalization, Activation
-from tensorflow.keras.layers import Input, Softmax
-from layers import PyramidPoolingModule, Bottleneck
+from tensorflow import keras
+from model.layers import PyramidPoolingModule, Bottleneck
 
 
-def create_fast_scnn(num_classes, input_shape=[1024, 2048, 3], 
+def create_fast_scnn(num_classes, input_shape=[None, None, 3],
                      sub_region_sizes=[1, 2, 3, 6], expansion_factor=6):
     """This function creates a Fast-SCNN neural network model using 
     the Keras functional API.
@@ -26,23 +22,23 @@ def create_fast_scnn(num_classes, input_shape=[1024, 2048, 3],
 
     # Sub-models for every Fast-SCNN block
 
-    input_tensor = Input(input_shape)
-    
-    learning_to_down_sample = Sequential([
-        Conv2D(32, 3, 2,padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+    input_tensor = keras.layers.Input(input_shape)
 
-        SeparableConv2D(48, 3, 2, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+    learning_to_down_sample = keras.models.Sequential([
+        keras.layers.Conv2D(32, 3, 2, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
 
-        SeparableConv2D(48, 3, 2, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+        keras.layers.SeparableConv2D(48, 3, 2, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
+
+        keras.layers.SeparableConv2D(48, 3, 2, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
     ])
 
-    global_feature_extractor = Sequential([
+    global_feature_extractor = keras.models.Sequential([
         Bottleneck(64, 2, expansion_factor),
         Bottleneck(64, 1, expansion_factor),
         Bottleneck(64, 1, expansion_factor),
@@ -56,36 +52,36 @@ def create_fast_scnn(num_classes, input_shape=[1024, 2048, 3],
         Bottleneck(128, 1, expansion_factor),
     ])
 
-    feature_fusion_main_branch = Sequential([
-        UpSampling2D((4, 4)),
-        DepthwiseConv2D(3, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+    feature_fusion_main_branch = keras.models.Sequential([
+        keras.layers.UpSampling2D((4, 4)),
+        keras.layers.DepthwiseConv2D(3, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
 
-        Conv2D(128, 1, 1, padding="same"),
-        BatchNormalization()
+        keras.layers.Conv2D(128, 1, 1, padding="same"),
+        keras.layers.BatchNormalization()
     ])
 
-    feature_fuison_skip_connection = Sequential([
-        Conv2D(128, 1, 1, padding="same"),
-        BatchNormalization()
+    feature_fusion_skip_connection = keras.models.Sequential([
+        keras.layers.Conv2D(128, 1, 1, padding="same"),
+        keras.layers.BatchNormalization()
     ])
 
-    classifier = Sequential([
-        SeparableConv2D(128, 3, 1, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+    classifier = keras.models.Sequential([
+        keras.layers.SeparableConv2D(128, 3, 1, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
 
-        SeparableConv2D(128, 3, 1, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
+        keras.layers.SeparableConv2D(128, 3, 1, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
 
-        Conv2D(num_classes, 3, 1, padding="same"),
-        BatchNormalization(),
-        Activation("relu"),
-        
-        UpSampling2D((8, 8)),
-        Softmax()
+        keras.layers.Conv2D(num_classes, 3, 1, padding="same"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Activation("relu"),
+
+        keras.layers.UpSampling2D((8, 8)),
+        keras.layers.Softmax()
     ])
 
     # Using sub-models on input
@@ -94,8 +90,27 @@ def create_fast_scnn(num_classes, input_shape=[1024, 2048, 3],
     skip_connection = tensor
     tensor = global_feature_extractor(tensor)
     tensor = PyramidPoolingModule(sub_region_sizes)(tensor)
-    tensor = feature_fusion_main_branch(tensor) +\
-            feature_fuison_skip_connection(skip_connection)
+    tensor = feature_fusion_main_branch(
+        tensor) + feature_fusion_skip_connection(skip_connection)
     output_tensor = classifier(tensor)
-    model = Model(input_tensor, output_tensor)
+    model = keras.models.Model(input_tensor, output_tensor)
     return model
+
+
+def loss_function(y_true, y_pred):
+    loss_value = keras.backend.categorical_crossentropy(y_true, y_pred)
+    loss_value = keras.backend.sum(loss_value, axis=[1, 2])
+    loss_value = keras.backend.mean(loss_value)
+    return loss_value
+
+
+def custom_accuracy_metric(y_true, y_pred):
+    y_true = keras.backend.argmax(y_true)
+    y_pred = keras.backend.argmax(y_pred)
+    correct_predictions = keras.backend.sum(keras.backend.ones_like(
+        y_true.shape, "float32"))
+    all_predictions = keras.backend.sum(keras.backend.cast(
+        keras.backend.equal(y_true, y_pred), "float32"), axis=[1, 2])
+    accuracy = correct_predictions / all_predictions
+    accuracy = keras.backend.mean(accuracy)
+    return accuracy

@@ -1,34 +1,34 @@
-from PIL import Image
 from glob import glob
+from PIL import Image
 import numpy as np
-from tensorflow.keras.utils import Sequence
+from tensorflow import keras
 
 
-class ADE20KDataset(Sequence):
+class ADE20KDataset(keras.utils.Sequence):
     """Dataset class implemented by Keras API
-    
+
     Attributes:
         images_folder: Folder with images
-        annotations_folder: Folder with annotations to the images. 
-            Annotations will be matched with images by the number 
+        annotations_folder: Folder with annotations to the images.
+            Annotations will be matched with images by the number
             indicated in the image filename
         num_classes: Number of classes.
         batch_size: Dataset batch size
     """
+
     def __init__(self, images_folder, annotations_folder, num_classes,
                  batch_size):
         self.num_classes = num_classes
         self.images_folder = images_folder
         self.annotations_folder = annotations_folder
-        self.batch_size = batch_size 
+        self.batch_size = batch_size
         self.dataset = self.get_file_path()
-        self.length = len(self.dataset)
-    
+
     def get_file_path(self):
         """This function gets the path to each image from the dataset.
-        
+
         Returns:
-            dataset: List containing images and annotations, divided into 
+            dataset: List containing images and annotations, divided into
                 batches. List structure:
                     [
                         # First batch
@@ -36,7 +36,7 @@ class ADE20KDataset(Sequence):
                             [image_filename1, image_filename2, ...],
                             [annotation_filename1, annotation_filename2, ...]
                         ]
-                        
+
                         # Second batch
                         [
                             [image_filename1, image_filename2, ...],
@@ -54,67 +54,57 @@ class ADE20KDataset(Sequence):
                 annotations[i * self.batch_size: (i + 1) * self.batch_size]
             ])
         if len(images) % self.batch_size != 0:
-            dataset.append([images[(i + 1) * self.batch_size:],
-                            annotations[(i + 1) * self.batch_size:]])
+            idx = len(images) // self.batch_size
+            dataset.append([images[idx * self.batch_size:],
+                            annotations[idx * self.batch_size:]])
         return dataset
 
-    def get_one_hot_vector(self, idx, length):
-        """This function creates one-hot NumPy vector
-        
-        Args:
-            idx: Index of non-zero element
-            length: Vector length
-        """
-        assert idx < length
-        return np.array([int(i == idx) for i in range(length)])
-    
     def annotation_processing(self, annotations):
-        """This function changes the mask of images, turning each 
+        """This function changes the mask of images, turning each
         pixel into one-hot vector.
-        
+
         Args:
-            annotations: NumPy array containing images. Array shape: 
+            annotations: NumPy array containing images. Array shape:
                 (num_images, img_height, img_width)
-            num_classes: number of classes
-                
+
         Returns:
-            vectorized_annotation: NumPy array with shape 
+            vectorized_annotation: NumPy array with shape
                 (num_images, img_height, img_width, num_classes)
         """
-        vectorized_annotation = np.zeros((annotations.shape[0], 
-                                          annotations.shape[1], 
-                                          annotations.shape[2],
-                                          self.num_classes))
-        for i in range(annotations.shape[0]):
-            for j in range(annotations.shape[1]):
-                for k in range(annotations.shape[2]):
-                    vectorized_annotation[i, j, k] = self.get_one_hot_vector(
-                        int(annotations[i, j, k]), self.num_classes)
+        annotations = np.expand_dims(annotations, -1)
+        vectorized_annotation = np.array(
+            np.equal(annotations, np.arange(self.num_classes)),
+            dtype="float32")
         return vectorized_annotation
-    
+
     def __len__(self):
-        return self.length
-    
+        return len(self.dataset)
+
     def __getitem__(self, idx):
-        image_size = None
-        images = None
+
+        # Due to the internal structure of the neural network,
+        # the image size must be a multiple of 32 and more than 256
+        image_shape = np.array(Image.open(self.dataset[idx][0][0])).shape
+        image_shape = [max(image_shape[0] // 32 * 32, 256),
+                       max(image_shape[1] // 32 * 32, 256), image_shape[2]]
+        images = np.zeros([0] + image_shape, "float32")
+
+        # The neural network can be trained on images of different sizes,
+        # so all images from the package must first resize to the same
+        # size. To do this, all images and annotations change their size
+        # and make it equal to the size of the first image of the package.
         for image_filename in self.dataset[idx][0]:
-            if image_size:
-                image = Image.open(image_filename).resize(
-                    [image_size[1], image_size[0]])
-                image = np.array(image, "float32")
-                image = np.expand_dims(image, 0)
-                images = np.append(images, image, 0)
-            else:
-                image = np.array(Image.open(image_filename), "float32")
-                image_size = image.shape[:2]
-                images = np.zeros([0] + list(image.shape), "float32")
-        annotations = np.zeros([0] + list(images.shape[1:3]), "float32")
+            image = Image.open(image_filename).resize([image_shape[1],
+                                                       image_shape[0]])
+            image = np.expand_dims(np.array(image, "float32"), 0)
+            images = np.append(images, image, 0)
+        annotations = np.zeros([0] + image_shape[:2], "float32")
         for annotation_filename in self.dataset[idx][1]:
             annotation = Image.open(annotation_filename).resize(
-                [image_size[1], image_size[0]])
+                [image_shape[1], image_shape[0]])
             annotation = np.array(annotation, "float32")
             annotation = np.expand_dims(annotation, 0)
             annotations = np.append(annotations, annotation, 0)
         annotations = self.annotation_processing(annotations)
+        images /= 255
         return images, annotations

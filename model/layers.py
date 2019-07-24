@@ -1,11 +1,10 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Conv2D, DepthwiseConv2D
-from tensorflow.keras.layers import AveragePooling2D, Layer
-from tensorflow.keras.layers import BatchNormalization, Activation
-from tensorflow.keras.layers import Lambda, Concatenate
+from tensorflow import keras
+
+__all__ = ["PyramidPoolingModule", "Bottleneck"]
 
 
-class PyramidPoolingModule(Layer):
+class PyramidPoolingModule(keras.layers.Layer):
     """This class implements the Pyramid Pooling Module
     
     WARNING: This class uses eager execution, so it only works with
@@ -29,31 +28,32 @@ class PyramidPoolingModule(Layer):
         _, input_height, input_width, input_channels = tensor.shape
         feature_maps = [tensor]
         for i in self.sub_region_sizes:
-            curr_feature_map = AveragePooling2D(
+            curr_feature_map = keras.layers.AveragePooling2D(
                 pool_size=(input_height // i, input_width // i),
                 strides=(input_height // i, input_width // i))(tensor)
-            curr_feature_map = Conv2D(
+            curr_feature_map = keras.layers.Conv2D(
                     filters=int(input_channels) // len(self.sub_region_sizes),
                     kernel_size=3,
                     padding='same')(curr_feature_map)
-            curr_feature_map = Lambda(
+            curr_feature_map = keras.layers.Lambda(
                 lambda x: tf.image.resize(
                     x, (input_height, input_width)))(curr_feature_map)
             feature_maps.append(curr_feature_map)
 
-        output_tensor = Concatenate(axis=-1)(feature_maps)
+        output_tensor = keras.layers.Concatenate(axis=-1)(feature_maps)
         
-        output_tensor = Conv2D(filters=128, kernel_size=3, strides=1,
-                                    padding="same")(output_tensor)
-        output_tensor = BatchNormalization()(output_tensor)
-        output_tensor = Activation("relu")(output_tensor)
+        output_tensor = keras.layers.Conv2D(
+            filters=128, kernel_size=3, strides=1, padding="same")(
+            output_tensor)
+        output_tensor = keras.layers.BatchNormalization()(output_tensor)
+        output_tensor = keras.layers.Activation("relu")(output_tensor)
         return output_tensor
 
     def compute_output_shape(self, input_shape):
         return input_shape
     
 
-class Bottleneck(Layer):
+class Bottleneck(keras.layers.Layer):
     """Implementing Bottleneck.
     
     This class implements the bottleneck module for Fast-SCNN.
@@ -97,25 +97,26 @@ class Bottleneck(Layer):
     
     def call(self, tensor):
         _, input_height, input_width, input_channels = tensor.shape
-        tensor = Conv2D(filters=input_channels * self.expansion_factor,
-                        kernel_size=1,
-                        strides=1,
-                        padding="same",
-                        activation="relu")(tensor)
-        tensor = BatchNormalization()(tensor)
-        tensor = Activation('relu')(tensor)
+        tensor = keras.layers.Conv2D(
+            filters=input_channels * self.expansion_factor,
+            kernel_size=1,
+            strides=1,
+            padding="same",
+            activation="relu")(tensor)
+        tensor = keras.layers.BatchNormalization()(tensor)
+        tensor = keras.layers.Activation('relu')(tensor)
 
-        tensor = DepthwiseConv2D(kernel_size=3,
-                                 strides=self.strides,
-                                 padding="same")(tensor)
-        tensor = BatchNormalization()(tensor)
-        tensor = Activation('relu')(tensor)
+        tensor = keras.layers.DepthwiseConv2D(kernel_size=3,
+                                              strides=self.strides,
+                                              padding="same")(tensor)
+        tensor = keras.layers.BatchNormalization()(tensor)
+        tensor = keras.layers.Activation('relu')(tensor)
 
-        tensor = Conv2D(filters=self.filters,
-                        kernel_size=1,
-                        strides=1,
-                        padding="same")(tensor)
-        tensor = BatchNormalization()(tensor)
-        tensor = Activation('relu')(tensor)
+        tensor = keras.layers.Conv2D(filters=self.filters,
+                                     kernel_size=1,
+                                     strides=1,
+                                     padding="same")(tensor)
+        tensor = keras.layers.BatchNormalization()(tensor)
+        tensor = keras.layers.Activation('relu')(tensor)
 
         return tensor
