@@ -1,26 +1,29 @@
+import os
+from urllib.request import urlretrieve
+from tarfile import TarFile
+from random import shuffle
 from glob import glob
 from PIL import Image
 import numpy as np
 from tensorflow import keras
 
 
-class ADE20KDataset(keras.utils.Sequence):
+class Dataset(keras.utils.Sequence):
     """Dataset class implemented by Keras API
 
     Attributes:
-        images_folder: Folder with images
-        annotations_folder: Folder with annotations to the images.
-            Annotations will be matched with images by the number
-            indicated in the image filename
+        image_filenames: List containing all image file names
+        annotation_filenames: List containing all annotation file names
+            for each image
         num_classes: Number of classes.
         batch_size: Dataset batch size
     """
 
-    def __init__(self, images_folder, annotations_folder, num_classes,
+    def __init__(self, image_filenames, annotation_filenames, num_classes,
                  batch_size):
         self.num_classes = num_classes
-        self.images_folder = images_folder
-        self.annotations_folder = annotations_folder
+        self.image_filenames = image_filenames
+        self.annotation_filenames = annotation_filenames
         self.batch_size = batch_size
         self.dataset = self.get_file_path()
 
@@ -45,18 +48,19 @@ class ADE20KDataset(keras.utils.Sequence):
                         ...
                     ]
         """
-        images = sorted(glob(f"{self.images_folder}/*"))
-        annotations = sorted(glob(f"{self.annotations_folder}/*"))
         dataset = []
-        for i in range(len(images) // self.batch_size):
+
+        for i in range(len(self.image_filenames) // self.batch_size):
             dataset.append([
-                images[i * self.batch_size: (i + 1) * self.batch_size],
-                annotations[i * self.batch_size: (i + 1) * self.batch_size]
+                self.image_filenames[i * self.batch_size:
+                                     (i + 1) * self.batch_size],
+                self.annotation_filenames[i * self.batch_size:
+                                          (i + 1) * self.batch_size]
             ])
-        if len(images) % self.batch_size != 0:
-            idx = len(images) // self.batch_size
-            dataset.append([images[idx * self.batch_size:],
-                            annotations[idx * self.batch_size:]])
+        if len(self.image_filenames) % self.batch_size != 0:
+            idx = len(self.image_filenames) // self.batch_size
+            dataset.append([self.image_filenames[idx * self.batch_size:],
+                            self.annotation_filenames[idx * self.batch_size:]])
         return dataset
 
     def annotation_processing(self, annotations):
@@ -71,6 +75,7 @@ class ADE20KDataset(keras.utils.Sequence):
             vectorized_annotation: NumPy array with shape
                 (num_images, img_height, img_width, num_classes)
         """
+        annotations = np.where(annotations == 255, 0, annotations)
         annotations = np.expand_dims(annotations, -1)
         vectorized_annotation = np.array(
             np.equal(annotations, np.arange(self.num_classes)),
@@ -108,3 +113,37 @@ class ADE20KDataset(keras.utils.Sequence):
         annotations = self.annotation_processing(annotations)
         images /= 255
         return images, annotations
+
+
+def get_filenames(folder):
+    """This function get image and annotation file names from a dataset.
+
+    Args:
+        folder: Folder with PASCAL VOC 2012 dataset. This directory should
+            contain a folder "VOCdevkit"
+
+    Returns:
+        images: List containing all images from dataset
+        annotations: List containing segmented mask for each image
+    """
+    annotations = glob(f"{folder}VOCdevkit/VOC2012/SegmentationClass/*")
+    shuffle(annotations)
+    image_codes = [elem.split('/')[-1].split(".")[0] for elem in annotations]
+    images = [f"{folder}VOCdevkit/VOC2012/JPEGImages/{image_code}.jpg"
+              for image_code in image_codes]
+    return images, annotations
+
+
+def download_dataset(download_folder):
+    """This function loads the PASCAL VOC dataset into the specified directory.
+
+    Args:
+        download_folder: Folder with dataset. After downloading, the directory
+            "VOCdevkit" will be created in this folder.
+    """
+    urlretrieve(
+        "http://host.robots.ox.ac.uk/pascal/VOC/voc2012/"
+        "VOCtrainval_11-May-2012.tar", "dataset.tar"
+    )
+    TarFile("dataset.tar").extractall(download_folder)
+    os.remove("dataset.tar")

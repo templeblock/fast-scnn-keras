@@ -6,20 +6,21 @@ __all__ = ["PyramidPoolingModule", "Bottleneck"]
 
 class PyramidPoolingModule(keras.layers.Layer):
     """This class implements the Pyramid Pooling Module
-    
+
     WARNING: This class uses eager execution, so it only works with
-        Tensorflow 2.0 backend.
-    
+        TensorFlow 2.0 backend.
+
     Arguments
         sub_region_size: A list containing the size of each region for the
             sub-region average pooling. The default value is [1, 2, 3, 6]
-            
+
     Input shape
         Tensor with shape: (batch, rows, cols, channels)
-        
+
     Output shape
         Tensor with shape: (batch, rows, cols, channels * 2)
     """
+
     def __init__(self, sub_region_sizes, **kwargs):
         self.sub_region_sizes = sub_region_sizes
         super(PyramidPoolingModule, self).__init__(dynamic=True, **kwargs)
@@ -32,16 +33,16 @@ class PyramidPoolingModule(keras.layers.Layer):
                 pool_size=(input_height // i, input_width // i),
                 strides=(input_height // i, input_width // i))(tensor)
             curr_feature_map = keras.layers.Conv2D(
-                    filters=int(input_channels) // len(self.sub_region_sizes),
-                    kernel_size=3,
-                    padding='same')(curr_feature_map)
+                filters=int(input_channels) // len(self.sub_region_sizes),
+                kernel_size=3,
+                padding='same')(curr_feature_map)
             curr_feature_map = keras.layers.Lambda(
                 lambda x: tf.image.resize(
                     x, (input_height, input_width)))(curr_feature_map)
             feature_maps.append(curr_feature_map)
 
         output_tensor = keras.layers.Concatenate(axis=-1)(feature_maps)
-        
+
         output_tensor = keras.layers.Conv2D(
             filters=128, kernel_size=3, strides=1, padding="same")(
             output_tensor)
@@ -51,11 +52,11 @@ class PyramidPoolingModule(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape
-    
+
 
 class Bottleneck(keras.layers.Layer):
     """Implementing Bottleneck.
-    
+
     This class implements the bottleneck module for Fast-SCNN.
     Layer structure:
         ----------------------------------------------------------------
@@ -68,7 +69,7 @@ class Bottleneck(keras.layers.Layer):
         |----------------|---------|---------|--------|----------------|
         | h/s * w/s * tc |  Conv2D |    1    |    1   | h/s * w/s * c` |
         |--------------------------------------------------------------|
-    
+
         Designations:
             h: input height
             w: input width
@@ -81,20 +82,21 @@ class Bottleneck(keras.layers.Layer):
         filters: Output filters
         strides: Stride used in depthwise convolution layer
         expansion_factor: hyperparameter
-        
+
     # Input shape
         Tensor with shape: (batch, rows, cols, channels)
-        
+
     # Output shape
         Tensor with shape: (batch, rows // stride, cols // stride,
                             new_channels)
     """
+
     def __init__(self, filters, strides, expansion_factor, **kwargs):
         self.filters = filters
         self.strides = strides
         self.expansion_factor = expansion_factor
         super(Bottleneck, self).__init__(**kwargs)
-    
+
     def call(self, tensor):
         _, input_height, input_width, input_channels = tensor.shape
         tensor = keras.layers.Conv2D(

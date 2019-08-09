@@ -1,12 +1,14 @@
 from tensorflow import keras
-from model.layers import PyramidPoolingModule, Bottleneck
+from .layers import PyramidPoolingModule, Bottleneck
+
+__all__ = ["create_fast_scnn"]
 
 
 def create_fast_scnn(num_classes, input_shape=[None, None, 3],
                      sub_region_sizes=[1, 2, 3, 6], expansion_factor=6):
-    """This function creates a Fast-SCNN neural network model using 
+    """This function creates a Fast-SCNN neural network model using
     the Keras functional API.
-    
+
     Args:
         num_classes: Number of classes
         input_shape: A list containing information about the size of the image.
@@ -15,7 +17,7 @@ def create_fast_scnn(num_classes, input_shape=[None, None, 3],
         expansion_factor: Hyperparameter in the bottleneck layer
         sub_region_sizes: A list containing the sizes of subregions for
             average pool by region in the pyramidal pool module
-    
+
     Returns:
         model: uncompiled Keras model
     """
@@ -24,93 +26,97 @@ def create_fast_scnn(num_classes, input_shape=[None, None, 3],
 
     input_tensor = keras.layers.Input(input_shape)
 
-    learning_to_down_sample = keras.models.Sequential([
-        keras.layers.Conv2D(32, 3, 2, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    learning_to_down_sample = keras.layers.Conv2D(
+        32, 3, 2, padding="same")(input_tensor)
+    learning_to_down_sample = keras.layers.BatchNormalization()(
+        learning_to_down_sample)
+    learning_to_down_sample = keras.layers.Activation("relu")(
+        learning_to_down_sample)
 
-        keras.layers.SeparableConv2D(48, 3, 2, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    learning_to_down_sample = keras.layers.SeparableConv2D(
+        48, 3, 2, padding="same")(learning_to_down_sample)
+    learning_to_down_sample = keras.layers.BatchNormalization()(
+        learning_to_down_sample)
+    learning_to_down_sample = keras.layers.Activation("relu")(
+        learning_to_down_sample)
 
-        keras.layers.SeparableConv2D(48, 3, 2, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
-    ])
+    learning_to_down_sample = keras.layers.SeparableConv2D(
+        48, 3, 2, padding="same")(learning_to_down_sample)
+    learning_to_down_sample = keras.layers.BatchNormalization()(
+        learning_to_down_sample)
+    learning_to_down_sample = keras.layers.Activation("relu")(
+        learning_to_down_sample)
 
-    global_feature_extractor = keras.models.Sequential([
-        Bottleneck(64, 2, expansion_factor),
-        Bottleneck(64, 1, expansion_factor),
-        Bottleneck(64, 1, expansion_factor),
+    skip_connection = learning_to_down_sample
 
-        Bottleneck(96, 2, expansion_factor),
-        Bottleneck(96, 1, expansion_factor),
-        Bottleneck(96, 1, expansion_factor),
+    # Global feature extractor
 
-        Bottleneck(128, 1, expansion_factor),
-        Bottleneck(128, 1, expansion_factor),
-        Bottleneck(128, 1, expansion_factor),
-    ])
+    global_feature_extractor = Bottleneck(64, 2, expansion_factor)(
+        learning_to_down_sample)
+    global_feature_extractor = Bottleneck(64, 1, expansion_factor)(
+        global_feature_extractor)
+    global_feature_extractor = Bottleneck(64, 1, expansion_factor)(
+        global_feature_extractor)
 
-    feature_fusion_main_branch = keras.models.Sequential([
-        keras.layers.UpSampling2D((4, 4)),
-        keras.layers.DepthwiseConv2D(3, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    global_feature_extractor = Bottleneck(96, 2, expansion_factor)(
+        global_feature_extractor)
+    global_feature_extractor = Bottleneck(96, 1, expansion_factor)(
+        global_feature_extractor)
+    global_feature_extractor = Bottleneck(96, 1, expansion_factor)(
+        global_feature_extractor)
 
-        keras.layers.Conv2D(128, 1, 1, padding="same"),
-        keras.layers.BatchNormalization()
-    ])
+    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
+        global_feature_extractor)
+    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
+        global_feature_extractor)
+    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
+        global_feature_extractor)
 
-    feature_fusion_skip_connection = keras.models.Sequential([
-        keras.layers.Conv2D(128, 1, 1, padding="same"),
-        keras.layers.BatchNormalization()
-    ])
+    global_feature_extractor = PyramidPoolingModule(sub_region_sizes)(
+        global_feature_extractor)
 
-    classifier = keras.models.Sequential([
-        keras.layers.SeparableConv2D(128, 3, 1, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    # Feature fusion
 
-        keras.layers.SeparableConv2D(128, 3, 1, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    feature_fusion_main_branch = keras.layers.UpSampling2D((4, 4))(
+        global_feature_extractor)
 
-        keras.layers.Conv2D(num_classes, 3, 1, padding="same"),
-        keras.layers.BatchNormalization(),
-        keras.layers.Activation("relu"),
+    feature_fusion_main_branch = keras.layers.DepthwiseConv2D(
+        3, padding="same")(feature_fusion_main_branch)
+    feature_fusion_main_branch = keras.layers.BatchNormalization()(
+        feature_fusion_main_branch)
+    feature_fusion_main_branch = keras.layers.Activation("relu")(
+        feature_fusion_main_branch)
+    feature_fusion_main_branch = keras.layers.Conv2D(
+        128, 1, 1, padding="same")(feature_fusion_main_branch)
+    feature_fusion_main_branch = keras.layers.BatchNormalization()(
+        feature_fusion_main_branch)
 
-        keras.layers.UpSampling2D((8, 8)),
-        keras.layers.Softmax()
-    ])
+    feature_fusion_skip_connection = keras.layers.Conv2D(
+        128, 1, 1, padding="same")(skip_connection)
+    feature_fusion_skip_connection = keras.layers.BatchNormalization()(
+        feature_fusion_skip_connection)
 
-    # Using sub-models on input
+    feature_fusion = feature_fusion_main_branch + feature_fusion_skip_connection
 
-    tensor = learning_to_down_sample(input_tensor)
-    skip_connection = tensor
-    tensor = global_feature_extractor(tensor)
-    tensor = PyramidPoolingModule(sub_region_sizes)(tensor)
-    tensor = feature_fusion_main_branch(
-        tensor) + feature_fusion_skip_connection(skip_connection)
-    output_tensor = classifier(tensor)
+    # Classifier
+
+    classifier = keras.layers.SeparableConv2D(128, 3, 1, padding="same")(
+        feature_fusion)
+    classifier = keras.layers.BatchNormalization()(classifier)
+    classifier = keras.layers.Activation("relu")(classifier)
+
+    classifier = keras.layers.SeparableConv2D(128, 3, 1, padding="same")(
+        classifier)
+    classifier = keras.layers.BatchNormalization()(classifier)
+    classifier = keras.layers.Activation("relu")(classifier)
+
+    classifier = keras.layers.Conv2D(num_classes, 3, 1, padding="same")(
+        classifier)
+    classifier = keras.layers.BatchNormalization()(classifier)
+    classifier = keras.layers.Activation("relu")(classifier)
+
+    output_tensor = keras.layers.UpSampling2D((8, 8))(classifier)
+    output_tensor = keras.layers.Softmax()(output_tensor)
+
     model = keras.models.Model(input_tensor, output_tensor)
     return model
-
-
-def loss_function(y_true, y_pred):
-    loss_value = keras.backend.categorical_crossentropy(y_true, y_pred)
-    loss_value = keras.backend.sum(loss_value, axis=[1, 2])
-    loss_value = keras.backend.mean(loss_value)
-    return loss_value
-
-
-def custom_accuracy_metric(y_true, y_pred):
-    y_true = keras.backend.argmax(y_true)
-    y_pred = keras.backend.argmax(y_pred)
-    correct_predictions = keras.backend.sum(keras.backend.ones_like(
-        y_true.shape, "float32"))
-    all_predictions = keras.backend.sum(keras.backend.cast(
-        keras.backend.equal(y_true, y_pred), "float32"), axis=[1, 2])
-    accuracy = correct_predictions / all_predictions
-    accuracy = keras.backend.mean(accuracy)
-    return accuracy
