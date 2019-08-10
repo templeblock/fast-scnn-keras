@@ -12,18 +12,21 @@ parser = argparse.ArgumentParser(
     description="Creating segmentation maps using Fast-SCNN")
 parser.add_argument("image", type=str, help="Path to image")
 parser.add_argument("weights", type=str, help="Path to weights for Fast-SCNN")
+parser.add_argument("--width", type=int, help="Image width", default=256)
+parser.add_argument("--height", type=int, help="Image height", default=256)
 args = parser.parse_args()
 
 # Creating a neural network model
 
-model = create_fast_scnn(num_classes=21)
+model = create_fast_scnn(num_classes=21,
+                         input_shape=[args.height, args.width, 3])
 model.load_weights(args.weights)
 
 # Creating a prediction
 
+img_size = [args.height, args.width]
 img = Image.open(args.image)
-img = img.resize([max(img.size[0] // 32 * 32, 256),
-                  max(img.size[1] // 32 * 32, 256)])
+img = img.resize([img_size[1], img_size[0]])
 img = np.array(img)
 colors = [[random() for i in range(3)] for j in range(21)]
 classes = [

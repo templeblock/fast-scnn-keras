@@ -1,5 +1,5 @@
 from tensorflow import keras
-from .layers import PyramidPoolingModule, Bottleneck
+from .layers import pyramid_pooling, bottleneck
 
 __all__ = ["create_fast_scnn"]
 
@@ -41,7 +41,7 @@ def create_fast_scnn(num_classes, input_shape=[None, None, 3],
         learning_to_down_sample)
 
     learning_to_down_sample = keras.layers.SeparableConv2D(
-        48, 3, 2, padding="same")(learning_to_down_sample)
+        64, 3, 2, padding="same")(learning_to_down_sample)
     learning_to_down_sample = keras.layers.BatchNormalization()(
         learning_to_down_sample)
     learning_to_down_sample = keras.layers.Activation("relu")(
@@ -51,29 +51,28 @@ def create_fast_scnn(num_classes, input_shape=[None, None, 3],
 
     # Global feature extractor
 
-    global_feature_extractor = Bottleneck(64, 2, expansion_factor)(
-        learning_to_down_sample)
-    global_feature_extractor = Bottleneck(64, 1, expansion_factor)(
-        global_feature_extractor)
-    global_feature_extractor = Bottleneck(64, 1, expansion_factor)(
-        global_feature_extractor)
+    global_feature_extractor = bottleneck(learning_to_down_sample,
+                                          64, 2, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          64, 1, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          64, 1, expansion_factor)
 
-    global_feature_extractor = Bottleneck(96, 2, expansion_factor)(
-        global_feature_extractor)
-    global_feature_extractor = Bottleneck(96, 1, expansion_factor)(
-        global_feature_extractor)
-    global_feature_extractor = Bottleneck(96, 1, expansion_factor)(
-        global_feature_extractor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          96, 2, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          96, 1, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          96, 1, expansion_factor)
 
-    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
-        global_feature_extractor)
-    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
-        global_feature_extractor)
-    global_feature_extractor = Bottleneck(128, 1, expansion_factor)(
-        global_feature_extractor)
-
-    global_feature_extractor = PyramidPoolingModule(sub_region_sizes)(
-        global_feature_extractor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          128, 1, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          128, 1, expansion_factor)
+    global_feature_extractor = bottleneck(global_feature_extractor,
+                                          128, 1, expansion_factor)
+    global_feature_extractor = pyramid_pooling(global_feature_extractor,
+                                               sub_region_sizes)
 
     # Feature fusion
 

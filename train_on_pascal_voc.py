@@ -16,12 +16,14 @@ if __name__ == "__main__":
     images, annotations = get_filenames(folder)
     split_point = int(len(images) * config["val_size"])
     train_dataset = Dataset(
+        image_size=config["image_size"],
         image_filenames=images[split_point:],
         annotation_filenames=annotations[split_point:],
         num_classes=config["num_classes"],
         batch_size=config["batch_size"]
     )
     val_dataset = Dataset(
+        image_size=(256, 256),
         image_filenames=images[:split_point],
         annotation_filenames=annotations[:split_point],
         num_classes=config["num_classes"],
@@ -31,8 +33,8 @@ if __name__ == "__main__":
     # Model training
 
     model = create_fast_scnn(num_classes=config["num_classes"],
-                             input_shape=[None, None, 3])
-    model.compile(optimizer=keras.optimizers.Adam(1e-4),
+                             input_shape=config["image_size"] + [3])
+    model.compile(optimizer=keras.optimizers.Adam(config["learning_rate"]),
                   loss="categorical_crossentropy")
     if config["checkpoint_folder"]:
         callbacks = [

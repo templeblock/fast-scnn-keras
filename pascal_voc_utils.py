@@ -12,6 +12,8 @@ class Dataset(keras.utils.Sequence):
     """Dataset class implemented by Keras API
 
     Attributes:
+        image_size: List containing image size.
+            ist structure: (image_height, image_width)
         image_filenames: List containing all image file names
         annotation_filenames: List containing all annotation file names
             for each image
@@ -19,8 +21,9 @@ class Dataset(keras.utils.Sequence):
         batch_size: Dataset batch size
     """
 
-    def __init__(self, image_filenames, annotation_filenames, num_classes,
-                 batch_size):
+    def __init__(self, image_size, image_filenames, annotation_filenames,
+                 num_classes, batch_size):
+        self.image_size = list(image_size)
         self.num_classes = num_classes
         self.image_filenames = image_filenames
         self.annotation_filenames = annotation_filenames
@@ -86,27 +89,16 @@ class Dataset(keras.utils.Sequence):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-
-        # Due to the internal structure of the neural network,
-        # the image size must be a multiple of 32 and more than 256
-        image_shape = np.array(Image.open(self.dataset[idx][0][0])).shape
-        image_shape = [max(image_shape[0] // 32 * 32, 256),
-                       max(image_shape[1] // 32 * 32, 256), image_shape[2]]
-        images = np.zeros([0] + image_shape, "float32")
-
-        # The neural network can be trained on images of different sizes,
-        # so all images from the package must first resize to the same
-        # size. To do this, all images and annotations change their size
-        # and make it equal to the size of the first image of the package.
+        images = np.zeros([0] + self.image_size + [3], "float32")
         for image_filename in self.dataset[idx][0]:
-            image = Image.open(image_filename).resize([image_shape[1],
-                                                       image_shape[0]])
+            image = Image.open(image_filename).resize([self.image_size[1],
+                                                       self.image_size[0]])
             image = np.expand_dims(np.array(image, "float32"), 0)
             images = np.append(images, image, 0)
-        annotations = np.zeros([0] + image_shape[:2], "float32")
+        annotations = np.zeros([0] + self.image_size, "float32")
         for annotation_filename in self.dataset[idx][1]:
             annotation = Image.open(annotation_filename).resize(
-                [image_shape[1], image_shape[0]])
+                [self.image_size[1], self.image_size[0]])
             annotation = np.array(annotation, "float32")
             annotation = np.expand_dims(annotation, 0)
             annotations = np.append(annotations, annotation, 0)

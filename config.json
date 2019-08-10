@@ -1,9 +1,10 @@
 {
-    "classes": ["background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"],
     "num_epochs": 100,
+    "image_size": [256, 256],
     "num_classes": 21,
     "batch_size": 16,
     "val_size": 0.15,
-    "checkpoint_folder": "/content/drive/My Drive/checkpoints/",
-    "folder_with_dataset": "/content/"
+    "checkpoint_folder": "",
+    "folder_with_dataset": "",
+    "learning_rate": 1e-3
 }
