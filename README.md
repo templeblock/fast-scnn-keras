@@ -16,7 +16,7 @@ Link to the oiginal paper: https://arxiv.org/pdf/1902.04502.pdf
 
 ### Installation
 ```
-git clone https://github.com/float256/fast-scnn-keras/archive/master.zip
+git clone https://github.com/float256/fast-scnn-keras.git
 unzip fast-scnn-keras-master.zip
 ```
 
