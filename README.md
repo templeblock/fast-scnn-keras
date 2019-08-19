@@ -17,7 +17,7 @@ Link to the oiginal paper: https://arxiv.org/pdf/1902.04502.pdf
 ### Installation
 ```
 git clone https://github.com/float256/fast-scnn-keras.git
-unzip fast-scnn-keras-master.zip
+pip3 install tensorflow==2.0.0-beta1 numpy Pillow matplotlib 
 ```
 
 ### Training
